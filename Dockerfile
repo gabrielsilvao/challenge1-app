@@ -3,20 +3,26 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod ./
+# Install git for fetching dependencies
+RUN apk add --no-cache git
+
+# Copy go mod files first for better caching
+COPY go.mod go.sum* ./
 RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# Ensure dependencies are resolved
+RUN go mod tidy
+
+# Build the application with optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o main .
 
 # Final stage
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
@@ -32,6 +38,13 @@ USER appuser
 
 # Expose port
 EXPOSE 8080
+
+# Environment variables for OpenTelemetry (can be overridden)
+ENV OTEL_SERVICE_NAME=sample-web-app \
+    OTEL_SERVICE_VERSION=1.0.0 \
+    OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4318 \
+    OTEL_INSECURE=true \
+    ENV=production
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
