@@ -4,17 +4,13 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /app
 
 # Install git for fetching dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files first for better caching
-COPY go.mod go.sum* ./
-RUN go mod download
-
-# Copy source code
+# Copy all source code first
 COPY . .
 
-# Ensure dependencies are resolved
-RUN go mod tidy
+# Download and resolve dependencies (generates go.sum)
+RUN go mod tidy && go mod download
 
 # Build the application with optimizations
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o main .
