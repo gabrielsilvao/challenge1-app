@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -76,6 +77,20 @@ func TracingMiddleware(tel *telemetry.Telemetry, next http.Handler) http.Handler
 		if rw.statusCode >= 400 {
 			span.SetAttributes(attribute.Bool("error", true))
 		}
+
+		// Log request (structured JSON for Datadog)
+		log.Printf(`{"timestamp":"%s","level":"info","service":"sample-web-app","trace_id":"%s","span_id":"%s","http.method":"%s","http.url":"%s","http.status_code":%d,"http.duration_ms":%.2f,"http.response_size":%d,"http.remote_addr":"%s","http.user_agent":"%s"}`,
+			time.Now().UTC().Format(time.RFC3339),
+			traceID,
+			span.SpanContext().SpanID().String(),
+			r.Method,
+			r.URL.String(),
+			rw.statusCode,
+			float64(duration.Microseconds())/1000.0,
+			rw.written,
+			r.RemoteAddr,
+			r.UserAgent(),
+		)
 
 		// Record metrics
 		tel.RecordRequest(ctx, r.Method, r.URL.Path, rw.statusCode, duration)
